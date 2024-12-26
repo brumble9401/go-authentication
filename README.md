@@ -4,6 +4,11 @@
 
 This project is a simple authentication system implemented in Golang. It demonstrates how to handle user registration, login, and session management using JWT (JSON Web Tokens).
 
+## Tech Stack
+
+- **Golang**: The main programming language used for developing the authentication system.
+- **ScyllaDB**: A high-performance NoSQL database used for storing user data and authentication information.
+
 ## Features
 
 - User Registration
