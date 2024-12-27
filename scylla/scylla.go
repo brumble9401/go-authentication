@@ -8,11 +8,11 @@ import (
 
 // Manager manages establishing connections to ScyllaDB.
 type Manager struct {
-	cfg config.Config
+	cfg config.ScyllaConfig
 }
 
 // NewManager creates a new Manager.
-func NewManager(cfg config.Config) *Manager {
+func NewManager(cfg config.ScyllaConfig) *Manager {
 	return &Manager{
 		cfg: cfg,
 	}

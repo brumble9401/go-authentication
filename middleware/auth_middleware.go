@@ -6,16 +6,17 @@ import (
 	"strings"
 
 	"github.com/gocql/gocql"
+	"github.com/gofiber/fiber/v2/log"
 	"github.com/golang-jwt/jwt/v4"
 )
 
-var jwtKey = []byte("your_secret_key")
-
 type Claims struct {
     UserID   gocql.UUID `json:"user_id"`
-    Username string     `json:"username"`
-    jwt.StandardClaims
+    // Username string     `json:"username"`
+    jwt.RegisteredClaims
 }
+
+var jwtKey = []byte("5bpehDpA1N0Hj1o+4piTXnRiJVosa9ND7n3QhBZR/cw=")
 
 func AuthMiddleware(next http.Handler) http.Handler {
     return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -31,7 +32,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
         token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
             return jwtKey, nil
         })
-
+        log.Debug("Token: ", token)
         if err != nil || !token.Valid {
             http.Error(w, "Invalid token", http.StatusUnauthorized)
             return

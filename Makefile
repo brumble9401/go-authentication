@@ -8,4 +8,4 @@ run: build
 	@./bin/golang-authentication
 
 migrate-up:
-	@go run cmd/migrate/main.go
+	@go run cmd/migration/main.go

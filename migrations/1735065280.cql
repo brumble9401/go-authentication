@@ -21,8 +21,11 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT,
     full_name TEXT,
     role_id UUID,
+    is_active BOOLEAN,
+    login_at TIMESTAMP,
+    logout_at TIMESTAMP,
     created_at TIMESTAMP,
     updated_at TIMESTAMP,
-    PRIMARY KEY ((user_id, username), created_at)
+    PRIMARY KEY (user_id)
 );
 

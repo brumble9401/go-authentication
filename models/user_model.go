@@ -14,6 +14,9 @@ type User struct {
     Email        string     `json:"email" db:"email"`
     FullName     string     `json:"full_name,omitempty" db:"full_name"`
     RoleID       gocql.UUID `json:"role_id" db:"role_id"`
+    IsActive     bool       `json:"is_active" db:"is_active"`
+    LoginAt      time.Time  `json:"login_at,omitempty" db:"login_at"`
+    LogoutAt     time.Time  `json:"logout_at,omitempty" db:"logout_at"`
     CreatedAt    time.Time  `json:"created_at" db:"created_at"`
     UpdatedAt    time.Time  `json:"updated_at" db:"updated_at"`
 }
@@ -45,8 +48,13 @@ type LoginPayload struct {
     Password string `json:"password"`
 }
 
+type UsernamePasswordPayload struct {
+    Username string `json:"username"`
+    Password string `json:"password"`
+}
+
 type Claims struct {
     UserID   gocql.UUID `json:"user_id"`
-    Username string     `json:"username"`
+    // Username string     `json:"username"`
     jwt.RegisteredClaims
 }

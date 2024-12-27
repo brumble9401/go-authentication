@@ -62,3 +62,20 @@ func (qb *ScyllaQueryBuilder) SelectConditionQuery(table string, column string, 
     )
     return query
 }
+
+func (qb *ScyllaQueryBuilder) UpdateQuery(table string, column string, id gocql.UUID, data map[string]interface{}) *gocql.Query {
+    setClauses := make([]string, 0, len(data))
+    values := make([]interface{}, 0, len(data)+1)
+
+    for col, val := range data {
+        setClauses = append(setClauses, col+" = ?")
+        values = append(values, val)
+    }
+    values = append(values, id)
+
+    query := qb.session.Query(
+        "UPDATE "+table+" SET "+strings.Join(setClauses, ", ")+" WHERE " + column + " = ?",
+        values...,
+    )
+    return query
+}

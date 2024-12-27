@@ -23,6 +23,7 @@ func NewAPIServer(addr string, userService user.Service) *APIServer {
 func (s *APIServer) Run() error {
     router := mux.NewRouter()
     subRouter := router.PathPrefix("/api/v1").Subrouter()
+    // subRouter.Use(middleware.AuthMiddleware)
 
     userHandler := user.NewHandler(s.userService)
     userHandler.RegisterRoutes(subRouter)

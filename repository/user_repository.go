@@ -18,7 +18,9 @@ var jwtKey = []byte("5bpehDpA1N0Hj1o+4piTXnRiJVosa9ND7n3QhBZR/cw=")
 type UserRepository interface {
     Register(ctx context.Context, user *models.User, password string) error
     Login(ctx context.Context, username, password string) (string, error)
+    GetUserByID(ctx context.Context, userID gocql.UUID) (*models.User, error)
     GetUserByEmailOrUsername(ctx context.Context, email, username string) (*models.User, error)
+    UpdateUsernameAndPassword(ctx context.Context, payload *models.UsernamePasswordPayload, userID gocql.UUID) error
 }
 
 type userRepository struct {
@@ -60,7 +62,7 @@ func (r *userRepository) Login(ctx context.Context, username, password string) (
         expirationTime := time.Now().Add(24 * time.Hour)
         claims := &models.Claims{
             UserID:   user.UserID,
-            Username: user.Username,
+            // Username: user.Username,
             RegisteredClaims: jwt.RegisteredClaims{
 				ExpiresAt: jwt.NewNumericDate(expirationTime),
 			},
@@ -77,6 +79,19 @@ func (r *userRepository) Login(ctx context.Context, username, password string) (
     return "", errors.New("user not found")
 }
 
+func (r *userRepository) GetUserByID(ctx context.Context, userID gocql.UUID) (*models.User, error) {
+    query := r.queryBuilder.SelectConditionQuery("users", "user_id", userID.String())
+    iter := query.Iter()
+    defer iter.Close()
+
+    row := make(map[string]interface{})
+    if iter.MapScan(row) {
+        user := mapToUser(row)
+        return &user, nil
+    }
+    return &models.User{}, errors.New("user not found")
+}
+
 func (r *userRepository) GetUserByEmailOrUsername(ctx context.Context, email, username string) (*models.User, error) {
     var query *gocql.Query
     if email == ""  {
@@ -90,6 +105,22 @@ func (r *userRepository) GetUserByEmailOrUsername(ctx context.Context, email, us
         return &user, nil
     }
     return nil, iter.Close()
+}
+
+func (r *userRepository) UpdateUsernameAndPassword(ctx context.Context, payload *models.UsernamePasswordPayload, userID gocql.UUID) error {
+    hashedPassword, err := bcrypt.GenerateFromPassword([]byte(payload.Password), bcrypt.DefaultCost)
+    if err != nil {
+        return err
+    }
+
+    dataMap := map[string]interface{}{
+        "username":      payload.Username,
+        "password_hash": string(hashedPassword),
+        "updated_at":    time.Now(),
+    }
+
+    query := r.queryBuilder.UpdateQuery("users", "user_id", userID, dataMap)
+    return query.Exec()
 }
 
 func structToMap(data interface{}) map[string]interface{} {
