@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/gocql/gocql"
-	"github.com/gofiber/fiber/v2/log"
 	"github.com/golang-jwt/jwt/v4"
 )
 
@@ -32,7 +31,6 @@ func AuthMiddleware(next http.Handler) http.Handler {
         token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
             return jwtKey, nil
         })
-        log.Debug("Token: ", token)
         if err != nil || !token.Valid {
             http.Error(w, "Invalid token", http.StatusUnauthorized)
             return

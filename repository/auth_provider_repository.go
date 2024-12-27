@@ -9,13 +9,14 @@ import (
 	"github.com/brumble9401/golang-authentication/services/session"
 	"github.com/gocql/gocql"
 	"github.com/gofiber/fiber/v2/log"
-	"github.com/golang-jwt/jwt/v4"
+	// "github.com/golang-jwt/jwt/v4"
 )
 
 type AuthProviderRepository interface {
 	CreateAuthProvider(ctx context.Context, authProvider *models.AuthProvider) error
 	GetAuthProviderByProviderUserID(ctx context.Context, providerUserID string) (*models.AuthProvider, error)
-	CheckAndSaveProviderUserData(ctx context.Context, userData map[string]interface{}) (string, error)
+	// CheckAndSaveProviderUserData(ctx context.Context, userData map[string]interface{}) (string, error)
+	CheckAndSaveProviderUserDataBatch(ctx context.Context, batch *gocql.Batch, userData map[string]interface{})
 }
 
 func parseTime(timeStr string) time.Time {
@@ -51,61 +52,90 @@ func (r *authProviderRepository) GetAuthProviderByProviderUserID(ctx context.Con
 	return nil, nil
 }
 
-func (r *authProviderRepository) CheckAndSaveProviderUserData(ctx context.Context, userData map[string]interface{}) (string, error) {
-	query := r.queryBuilder.SelectConditionQuery("auth_providers", "provider_user_id", userData["id"].(string))
-	iter := query.Iter()
-	defer iter.Close()
+// func (r *authProviderRepository) CheckAndSaveProviderUserData(ctx context.Context, userData map[string]interface{}) (string, error) {
+// 	query := r.queryBuilder.SelectConditionQuery("auth_providers", "provider_user_id", userData["id"].(string))
+// 	iter := query.Iter()
+// 	defer iter.Close()
 
-	var authProvider *models.AuthProvider
-	row := make(map[string]interface{})
-	log.Debug("Checking if user exists")
-	if iter.MapScan(row) {
-		log.Debug("Getting auth provider")
-		authProvider = mapToAuthProvider(row)
-	} else {
-		authProvider = &models.AuthProvider{
-			AuthProviderID: gocql.TimeUUID(),
-			UserID:         userData["user_id"].(gocql.UUID),
-			Provider:       "GOOGLE",
-			ProviderUserID: userData["id"].(string),
-			FamilyName:     userData["family_name"].(string),
-			GivenName:      userData["given_name"].(string),
-			Email:          userData["email"].(string),
-			Picture:        userData["picture"].(string),
-			VerifiedEmail:  userData["verified_email"].(bool),
-			CreatedAt:      time.Now(),
-			UpdatedAt:      time.Now(),
-		}
-		log.Debug("Creating new auth provider")
-		err := r.CreateAuthProvider(ctx, authProvider)
-		if err != nil {
-			return "", err
-		}
-	}
+// 	var authProvider *models.AuthProvider
+// 	row := make(map[string]interface{})
+// 	log.Debug("Checking if user exists")
+// 	if iter.MapScan(row) {
+// 		log.Debug("Getting auth provider")
+// 		authProvider = mapToAuthProvider(row)
+// 	} else {
+// 		authProvider = &models.AuthProvider{
+// 			AuthProviderID: gocql.TimeUUID(),
+// 			UserID:         userData["user_id"].(gocql.UUID),
+// 			Provider:       "GOOGLE",
+// 			ProviderUserID: userData["id"].(string),
+// 			FamilyName:     userData["family_name"].(string),
+// 			GivenName:      userData["given_name"].(string),
+// 			Email:          userData["email"].(string),
+// 			Picture:        userData["picture"].(string),
+// 			VerifiedEmail:  userData["verified_email"].(bool),
+// 			CreatedAt:      time.Now(),
+// 			UpdatedAt:      time.Now(),
+// 		}
+// 		log.Debug("Creating new auth provider")
+// 		err := r.CreateAuthProvider(ctx, authProvider)
+// 		if err != nil {
+// 			return "", err
+// 		}
+// 	}
 
-	expirationTime := time.Now().Add(24 * time.Hour)
-	claims := &models.Claims{
-		UserID:   authProvider.UserID,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(expirationTime),
-		},
-	}
+// 	expirationTime := time.Now().Add(24 * time.Hour)
+// 	claims := &models.Claims{
+// 		UserID:   authProvider.UserID,
+// 		RegisteredClaims: jwt.RegisteredClaims{
+// 			ExpiresAt: jwt.NewNumericDate(expirationTime),
+// 		},
+// 	}
 
-	log.Debug("Creating JWT token")
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString(jwtKey)
-	if err != nil {
-		return "", err
-	}
+// 	log.Debug("Creating JWT token")
+// 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+// 	tokenString, err := token.SignedString(jwtKey)
+// 	if err != nil {
+// 		return "", err
+// 	}
 
-	log.Debug("Creating session")
-	err = r.redisService.CreateSession(ctx, authProvider.UserID.String(), tokenString, time.Hour * 24)
-	if err != nil {
-		return "", err
-	}
+// 	log.Debug("Creating session")
+// 	err = r.redisService.CreateSession(ctx, authProvider.UserID.String(), tokenString, time.Hour * 24)
+// 	if err != nil {
+// 		return "", err
+// 	}
 	
-	log.Debug("Returning token")
-	return tokenString, nil
+// 	log.Debug("Returning token")
+// 	return tokenString, nil
+// }
+func (r *authProviderRepository) CheckAndSaveProviderUserDataBatch(ctx context.Context, batch *gocql.Batch, userData map[string]interface{}) {
+    query := r.queryBuilder.SelectConditionQuery("auth_providers", "provider_user_id", userData["id"].(string))
+    iter := query.Iter()
+    defer iter.Close()
+
+    var authProvider *models.AuthProvider
+    row := make(map[string]interface{})
+    log.Debug("Checking if user exists")
+    if iter.MapScan(row) {
+        log.Debug("Getting auth provider")
+        authProvider = mapToAuthProvider(row)
+    } else {
+        authProvider = &models.AuthProvider{
+            AuthProviderID: gocql.TimeUUID(),
+            UserID:         userData["user_id"].(gocql.UUID),
+            Provider:       "GOOGLE",
+            ProviderUserID: userData["id"].(string),
+            FamilyName:     userData["family_name"].(string),
+            GivenName:      userData["given_name"].(string),
+            Email:          userData["email"].(string),
+            Picture:        userData["picture"].(string),
+            VerifiedEmail:  userData["verified_email"].(bool),
+            CreatedAt:      time.Now(),
+            UpdatedAt:      time.Now(),
+        }
+        log.Debug("Creating new auth provider")
+        r.queryBuilder.InsertToBatch(batch, "auth_providers", structToMap(authProvider))
+    }
 }
 
 func mapToAuthProvider(row map[string]interface{}) *models.AuthProvider {

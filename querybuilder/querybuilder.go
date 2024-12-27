@@ -14,6 +14,10 @@ func NewScyllaQueryBuilder(session *gocql.Session) *ScyllaQueryBuilder {
     return &ScyllaQueryBuilder{session: session}
 }
 
+func (qb *ScyllaQueryBuilder) NewBatch(batchType gocql.BatchType) *gocql.Batch {
+    return qb.session.NewBatch(batchType)
+}
+
 func (qb *ScyllaQueryBuilder) InsertQuery(table string, data map[string]interface{}) *gocql.Query {
     columns := make([]string, 0, len(data))
     values := make([]interface{}, 0, len(data))
@@ -30,6 +34,26 @@ func (qb *ScyllaQueryBuilder) InsertQuery(table string, data map[string]interfac
         values...,
     )
     return query
+}
+
+func (qb *ScyllaQueryBuilder) InsertToBatch(batch *gocql.Batch, table string, data map[string]interface{}) {
+    columns := make([]string, 0, len(data))
+    values := make([]interface{}, 0, len(data))
+    placeholders := make([]string, 0, len(data))
+
+    for col, val := range data {
+        columns = append(columns, col)
+        values = append(values, val)
+        placeholders = append(placeholders, "?")
+    }
+
+    query := "INSERT INTO " + table + " (" + strings.Join(columns, ", ") + ") VALUES (" + strings.Join(placeholders, ", ") + ")"
+    batch.Query(query, values...)
+}
+
+func (qb *ScyllaQueryBuilder) AddDeleteToBatch(batch *gocql.Batch, table string, column string, id gocql.UUID) {
+    query := "DELETE FROM " + table + " WHERE " + column + " = ?"
+    batch.Query(query, id)
 }
 
 func (qb *ScyllaQueryBuilder) DeleteQuery(table string, id gocql.UUID) *gocql.Query {

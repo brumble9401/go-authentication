@@ -3,12 +3,14 @@ package user
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/brumble9401/golang-authentication/models"
 	"github.com/brumble9401/golang-authentication/repository"
 	"github.com/brumble9401/golang-authentication/services/session"
 	"github.com/gocql/gocql"
 	"github.com/gofiber/fiber/v2/log"
+	"github.com/golang-jwt/jwt/v4"
 )
 
 type Service interface {
@@ -24,7 +26,10 @@ type service struct {
     roleRepo repository.RoleRepository
     authProviderRepo repository.AuthProviderRepository
     redisService session.Service
+    // queryBuilder interfaces.QueryBuilder
 }
+
+var jwtKey = []byte("5bpehDpA1N0Hj1o+4piTXnRiJVosa9ND7n3QhBZR/cw=")
 
 func NewService(userRepo repository.UserRepository, roleRepo repository.RoleRepository, authProviderRepo repository.AuthProviderRepository, redisService session.Service) Service {
     return &service{userRepo: userRepo, roleRepo: roleRepo, redisService: redisService, authProviderRepo: authProviderRepo}
@@ -61,6 +66,34 @@ func (s *service) GetUserByEmailOrUsername(ctx context.Context, email, username 
     return s.userRepo.GetUserByEmailOrUsername(ctx, email, username)
 }
 
+// func (s *service) LoginByGoogle(ctx context.Context, userData map[string]interface{}) (string, error) {
+//     role, err := s.roleRepo.GetRoleByName(ctx, "USER")
+//     if err != nil {
+//         return "", err
+//     }
+//     if role == nil {
+//         return "", errors.New("role not found")
+//     }
+
+//     user, err := s.userRepo.GetUserByEmailOrUsername(ctx, userData["email"].(string), "")
+//     if err != nil {
+//         return "", err
+//     }
+//     if user == nil {
+//         user = &models.User{
+//             Username: "NONE",
+//             Email:    userData["email"].(string),
+//             FullName: userData["family_name"].(string) + " " + userData["given_name"].(string),
+//             RoleID:   role.RoleID,
+//         }
+//         if err := s.userRepo.Register(ctx, user, ""); err != nil {
+//             return "", err
+//         }
+//     }
+
+//     userData["user_id"] = user.UserID
+//     return s.authProviderRepo.CheckAndSaveProviderUserData(ctx, userData)
+// }
 func (s *service) LoginByGoogle(ctx context.Context, userData map[string]interface{}) (string, error) {
     role, err := s.roleRepo.GetRoleByName(ctx, "USER")
     if err != nil {
@@ -69,6 +102,10 @@ func (s *service) LoginByGoogle(ctx context.Context, userData map[string]interfa
     if role == nil {
         return "", errors.New("role not found")
     }
+
+    // Start a batch
+    batch := s.userRepo.NewBatch(gocql.LoggedBatch)
+
     user, err := s.userRepo.GetUserByEmailOrUsername(ctx, userData["email"].(string), "")
     if err != nil {
         return "", err
@@ -80,13 +117,40 @@ func (s *service) LoginByGoogle(ctx context.Context, userData map[string]interfa
             FullName: userData["family_name"].(string) + " " + userData["given_name"].(string),
             RoleID:   role.RoleID,
         }
-        if err := s.userRepo.Register(ctx, user, ""); err != nil {
-            return "", err
-        }
+        // Add user registration to the batch
+        s.userRepo.RegisterBatch(ctx, batch, user, "")
     }
 
     userData["user_id"] = user.UserID
-    return s.authProviderRepo.CheckAndSaveProviderUserData(ctx, userData)
+    // Add auth provider data to the batch
+    s.authProviderRepo.CheckAndSaveProviderUserDataBatch(ctx, batch, userData)
+
+    // Apply the batch
+    if err := s.userRepo.ExecuteBatch(batch); err != nil {
+        return "", err
+    }
+
+    // Generate token
+    expirationTime := time.Now().Add(24 * time.Hour)
+    claims := &models.Claims{
+        UserID:   user.UserID,
+        RegisteredClaims: jwt.RegisteredClaims{
+            ExpiresAt: jwt.NewNumericDate(expirationTime),
+        },
+    }
+    token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+    tokenString, err := token.SignedString(jwtKey)
+    if err != nil {
+        return "", err
+    }
+
+    // Create session
+    err = s.redisService.CreateSession(ctx, user.UserID.String(), tokenString, time.Hour * 24)
+    if err != nil {
+        return "", err
+    }
+
+    return tokenString, nil
 }
 
 func (s *service) UpdateUsernameAndPassword(ctx context.Context, payload *models.UsernamePasswordPayload) error {

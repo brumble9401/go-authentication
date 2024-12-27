@@ -16,7 +16,10 @@ import (
 var jwtKey = []byte("5bpehDpA1N0Hj1o+4piTXnRiJVosa9ND7n3QhBZR/cw=")
 
 type UserRepository interface {
+    NewBatch(batchType gocql.BatchType) *gocql.Batch
+    ExecuteBatch(batch *gocql.Batch) error
     Register(ctx context.Context, user *models.User, password string) error
+    RegisterBatch(ctx context.Context, batch *gocql.Batch, user *models.User, password string)
     Login(ctx context.Context, username, password string) (string, error)
     GetUserByID(ctx context.Context, userID gocql.UUID) (*models.User, error)
     GetUserByEmailOrUsername(ctx context.Context, email, username string) (*models.User, error)
@@ -32,6 +35,14 @@ func NewUserRepository(session *gocql.Session, queryBuilder interfaces.QueryBuil
     return &userRepository{session: session, queryBuilder: queryBuilder}
 }
 
+func (r *userRepository) NewBatch(batchType gocql.BatchType) *gocql.Batch {
+    return r.session.NewBatch(batchType)
+}
+
+func (r *userRepository) ExecuteBatch(batch *gocql.Batch) error {
+    return r.session.ExecuteBatch(batch)
+}
+
 func (r *userRepository) Register(ctx context.Context, user *models.User, password string) error {
     hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
     if err != nil {
@@ -45,6 +56,20 @@ func (r *userRepository) Register(ctx context.Context, user *models.User, passwo
     dataMap := structToMap(user)
     query := r.queryBuilder.InsertQuery("users", dataMap)
     return query.Exec()
+}
+
+func (r *userRepository) RegisterBatch(ctx context.Context, batch *gocql.Batch, user *models.User, password string) {
+    hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+    if err != nil {
+        return
+    }
+    user.PasswordHash = string(hashedPassword)
+    user.UserID = gocql.TimeUUID()
+    user.CreatedAt = time.Now()
+    user.UpdatedAt = time.Now()
+
+    dataMap := structToMap(user)
+    r.queryBuilder.InsertToBatch(batch, "users", dataMap)
 }
 
 func (r *userRepository) Login(ctx context.Context, username, password string) (string, error) {
